@@ -35,3 +35,7 @@ This notebook was prepared with the following environmental settings.
 print(R.version)
 ```
 
+# Step 1 - Preparing Data
+```{r, message=FALSE, warning=FALSE}
+philosophy <- read.csv("../data/philosophy_data.csv", stringsAsFactors = FALSE)
+```
