@@ -9,24 +9,44 @@ output:
 
 # Step 0 - Install and load libraries
 ```{r, message=FALSE, warning=FALSE}
-packages.used=c("tm", "wordcloud", "RColorBrewer", "dplyr", "tidytext")
+packages.used=c("rvest", "tibble", "qdap", 
+                "sentimentr", "gplots", "dplyr",
+                "tm", "syuzhet", "factoextra", 
+                "beeswarm", "scales", "RColorBrewer",
+                "RANN", "tm", "topicmodels","readtext")
 
 # check packages that need to be installed.
 packages.needed=setdiff(packages.used, 
                         intersect(installed.packages()[,1], 
-                        packages.used))
+                                  packages.used))
 # install additional packages
 if(length(packages.needed)>0){
-  install.packages(packages.needed, dependencies = TRUE,
-                   repos='http://cran.us.r-project.org')
+  install.packages(packages.needed, dependencies = TRUE)
 }
 
-library(tm)
-library(wordcloud)
-library(RColorBrewer)
-library(dplyr)
-library(tidytext)
-library(knitr)
+# load packages
+library("rvest")
+library("tibble")
+# You may need to run
+# sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
+# in order to load qdap
+library("qdap")
+library("sentimentr")
+library("gplots")
+library("dplyr")
+library("tm")
+library("syuzhet")
+library("factoextra")
+library("beeswarm")
+library("scales")
+library("RColorBrewer")
+library("RANN")
+library("tm")
+library("topicmodels")
+library("readtext")
+
+source("../lib/plotstacked.R")
+source("../lib/speechFuncs.R")
 ```
 
 This notebook was prepared with the following environmental settings.
@@ -36,6 +56,41 @@ print(R.version)
 ```
 
 # Step 1 - Preparing Data
+
+The data used is from `THE PHILOSOPHY DATA PROJECT` 
+
 ```{r, message=FALSE, warning=FALSE}
+# Input data set
 philosophy <- read.csv("../data/philosophy_data.csv", stringsAsFactors = FALSE)
+
+```
+
+# Step 2 - Processing Data
+I will use sentences as units of analysis for this project, as sentences are natural language units for organizing thoughts and ideas. For each extracted sentence, we apply sentiment analysis using [NRC sentiment lexion].
+
+We assign an sequential id to each sentence in a speech (`sent.id`) and also calculated the number of words in each sentence as *sentence length* (`word.count`).
+
+
+```{r, message=FALSE, warning=FALSE}
+
+sentence.list=NULL
+for(i in 1:nrow(philosophy)){
+  sentences=sent_detect(philosophy$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    emotions=diag(1/(word.count+0.01))%*%as.matrix(emotions)
+    sentence.list=rbind(sentence.list, 
+                        cbind(speech.list[i,-ncol(speech.list)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
 ```
