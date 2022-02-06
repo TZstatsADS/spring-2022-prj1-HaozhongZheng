@@ -7,7 +7,7 @@ output:
   html_notebook: default
 ---
 
-# Step 0 - Install and load libraries
+## Step 0 - Install and load libraries
 ```{r, message=FALSE, warning=FALSE}
 packages.used=c("rvest", "tibble", "qdap", 
                 "sentimentr", "gplots", "dplyr",
@@ -65,26 +65,29 @@ philosophy <- read.csv("../data/philosophy_data.csv", stringsAsFactors = FALSE)
 
 ```
 
-# Step 2 - Processing Data
+## Step 2 - Processing Data
 I will use sentences as units of analysis for this project, as sentences are natural language units for organizing thoughts and ideas. For each extracted sentence, we apply sentiment analysis using [NRC sentiment lexion].
 
-We assign an sequential id to each sentence in a speech (`sent.id`) and also calculated the number of words in each sentence as *sentence length* (`word.count`).
+We assign an sequential id to each sentence in a philosophy context (`sent.id`) and also calculated the number of words in each sentence as *sentence length* (`word.count`).
 
 
 ```{r, message=FALSE, warning=FALSE}
-
-sentence.list=NULL
-for(i in 1:nrow(philosophy)){
-  sentences=sent_detect(philosophy$sentence_str[i],
+# Plato
+philosophy %>%
+  filter(author == "Plato") %>%
+  select(title, author, school, sentence_str, original_publication_date)-> Plato
+Plato.list=NULL
+for(i in 1:nrow(Plato)){
+  sentences=sent_detect(Plato$sentence_str[i],
                         endmarks = c("?", ".", "!", "|",";"))
   if(length(sentences)>0){
     emotions=get_nrc_sentiment(sentences)
     word.count=word_count(sentences)
     # colnames(emotions)=paste0("emo.", colnames(emotions))
     # in case the word counts are zeros?
-    emotions=diag(1/(word.count+0.01))%*%as.matrix(emotions)
-    sentence.list=rbind(sentence.list, 
-                        cbind(speech.list[i,-ncol(speech.list)],
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Plato.list=rbind(Plato.list, 
+                        cbind(Plato[i,-ncol(Plato)],
                               sentences=as.character(sentences), 
                               word.count,
                               emotions,
@@ -93,4 +96,363 @@ for(i in 1:nrow(philosophy)){
     )
   }
 }
+
+# Aristotle
+philosophy %>%
+  filter(author == "Aristotle") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Aristotle
+Aristotle.list = NULL
+for(i in 1:nrow(Aristotle)){
+  sentences=sent_detect(Aristotle$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Aristotle.list=rbind(Aristotle.list, 
+                        cbind(Aristotle[i,-ncol(Aristotle)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Adam Smith
+philosophy %>%
+  filter(author == "Smith") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Smith
+Smith.list = NULL
+for(i in 1:nrow(Smith)){
+  sentences=sent_detect(Smith$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Smith.list=rbind(Smith.list, 
+                        cbind(Smith[i,-ncol(Smith)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# John Locke
+philosophy %>%
+  filter(author == "Locke") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Locke
+Locke.list = NULL
+for(i in 1:nrow(Locke)){
+  sentences=sent_detect(Locke$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Locke.list=rbind(Locke.list, 
+                        cbind(Locke[i,-ncol(Locke)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Kant
+philosophy %>%
+  filter(author == "Kant") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Kant
+Kant.list = NULL
+for(i in 1:nrow(Kant)){
+  sentences=sent_detect(Kant$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Kant.list=rbind(Kant.list, 
+                        cbind(Kant[i,-ncol(Kant)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Hegel
+philosophy %>%
+  filter(author == "Hegel") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Hegel
+Hegel.list = NULL
+for(i in 1:nrow(Hegel)){
+  sentences=sent_detect(Hegel$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Hegel.list=rbind(Hegel.list, 
+                        cbind(Hegel[i,-ncol(Hegel)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Karl Marx
+philosophy %>%
+  filter(author == "Marx") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Marx
+Marx.list = NULL
+for(i in 1:nrow(Marx)){
+  sentences=sent_detect(Marx$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Marx.list=rbind(Marx.list, 
+                        cbind(Marx[i,-ncol(Marx)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Nietzsche
+philosophy %>%
+  filter(author == "Nietzsche") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Nietzsche
+Nietzsche.list = NULL
+for(i in 1:nrow(Nietzsche)){
+  sentences=sent_detect(Nietzsche$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Nietzsche.list=rbind(Nietzsche.list, 
+                        cbind(Nietzsche[i,-ncol(Nietzsche)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Martin Heidegger
+philosophy %>%
+  filter(author == "Heidegger") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Heidegger
+Heidegger.list = NULL
+for(i in 1:nrow(Heidegger)){
+  sentences=sent_detect(Heidegger$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Heidegger.list=rbind(Heidegger.list, 
+                        cbind(Heidegger[i,-ncol(Heidegger)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Ludwig Wittgenstein
+philosophy %>%
+  filter(author == "Wittgenstein") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Wittgenstein
+Wittgenstein.list = NULL
+for(i in 1:nrow(Wittgenstein)){
+  sentences=sent_detect(Wittgenstein$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+    Wittgenstein.list=rbind(Wittgenstein.list, 
+                        cbind(Wittgenstein[i,-ncol(Wittgenstein)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Quine
+philosophy %>%
+  filter(author == "Quine") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Quine
+Quine.list = NULL
+for(i in 1:nrow(Quine)){
+  sentences=sent_detect(Quine$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+   Quine.list=rbind(Quine.list, 
+                        cbind(Quine[i,-ncol(Quine)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Derrida
+philosophy %>%
+  filter(author == "Derrida") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Derrida
+Derrida.list = NULL
+for(i in 1:nrow(Derrida)){
+  sentences=sent_detect(Derrida$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+   Derrida.list=rbind(Derrida.list, 
+                        cbind(Derrida[i,-ncol(Derrida)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+# Bertrand Russell
+philosophy %>%
+  filter(author == "Russell") %>%
+  select(title, author, school, sentence_str, original_publication_date) -> Russell
+Russell.list = NULL
+for(i in 1:nrow(Russell)){
+  sentences=sent_detect(Russell$sentence_str[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    # colnames(emotions)=paste0("emo.", colnames(emotions))
+    # in case the word counts are zeros?
+    # emotions=diag(1/(word.count+0.01)) %*% as.matrix(emotions)
+   Russell.list=rbind(Russell.list, 
+                        cbind(Russell[i,-ncol(Russell)],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions,
+                              sent.id=1:length(sentences)
+                              )
+    )
+  }
+}
+
+sentence.list <- rbind(Plato.list, Aristotle.list, Smith.list, Locke.list, Kant.list,
+                       Hegel.list, Marx.list, Nietzsche.list, Heidegger.list,
+                       Wittgenstein.list, Quine.list, Derrida.list, Russell.list)
 ```
+
+Some non-sentences exist in raw data due to erroneous extra end-of-sentence marks. 
+```{r, message=FALSE, warning=FALSE}
+sentence.list=
+  sentence.list%>%
+  filter(!is.na(word.count)) 
+
+```
+
+## Step 3 - Data analysis -- sentiment analysis
+# Clestering of emotions
+
+```{r, message=FALSE, warning=FALSE}
+heatmap.2(cor(sentence.list%>%select(anger:trust)), 
+          scale = "none", 
+          col = redblue(100), , margin=c(6, 6), key=F,
+          trace = "none", density.info = "none")
+par(mar=c(4, 6, 2, 1))
+```
+
+```{r, message=FALSE, warning=FALSE}
+emo.means=colMeans(select(sentence.list, anger:trust)>0.01)
+col.use=c("red1", "yellow1", "orange1", "seagreen",
+            "springgreen", "royalblue", "purple1","plum1")
+barplot(emo.means[order(emo.means)], las=2, col=col.use[order(emo.means)], horiz=T, main="All Philosophers")
+```
+
+```{r, message=FALSE, warning=FALSE}
+# clestering plot
+presid.summary=tbl_df(sentence.list)%>%
+  filter(type=="nomin", File%in%sel.comparison)%>%
+  #group_by(paste0(type, File))%>%
+  group_by(File)%>%
+  summarise(
+    anger=mean(anger),
+    anticipation=mean(anticipation),
+    disgust=mean(disgust),
+    fear=mean(fear),
+    joy=mean(joy),
+    sadness=mean(sadness),
+    surprise=mean(surprise),
+    trust=mean(trust)
+    #negative=mean(negative),
+    #positive=mean(positive)
+  )
+presid.summary=as.data.frame(presid.summary)
+rownames(presid.summary)=as.character((presid.summary[,1]))
+km.res=kmeans(presid.summary[,-1], iter.max=200,
+              5)
+fviz_cluster(km.res, 
+             stand=F, repel= TRUE,
+             data = presid.summary[,-1], xlab="", xaxt="n",
+             show.clust.cent=FALSE)
+```
+
