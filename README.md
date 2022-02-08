@@ -1,6 +1,6 @@
 # Applied Data Science @ Columbia
 ## Fall 2021
-## Project 1: A "data story" on the history of philosophy
+## Project 1: To be or not to be? Does Sophie's World describe philosopher correctly?
 
 <img src="figs/Sophies World.jpg" width="500">
 
