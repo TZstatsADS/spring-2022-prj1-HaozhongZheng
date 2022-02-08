@@ -9,7 +9,7 @@ bibliography: references.bib
 csl: asm.csl
 ---
 
-## Step 0 - Install and load libraries
+# Step 0 - Install and load libraries
 ```{r, message=FALSE, warning=FALSE}
 packages.used=c("rvest", "tibble", "qdap", 
                 "sentimentr", "gplots", "dplyr",
@@ -46,6 +46,10 @@ library("RANN")
 library("tm")
 library("topicmodels")
 library("readtext")
+library("wordcloud")
+library("RColorBrewer")
+library("tidytext")
+library("knitr")
 
 source("../lib/plotstacked.R")
 source("../lib/speechFuncs.R")
@@ -67,7 +71,7 @@ philosophy <- read.csv("../data/philosophy_data.csv", stringsAsFactors = FALSE)
 
 ```
 
-## Step 2 - Processing Data
+# Step 2 - Processing Data
 We will use sentences as units of analysis for this project, as sentences are natural language units for organizing thoughts and ideas. For each extracted sentence, we apply sentiment analysis using [NRC sentiment lexion].
 
 We assign an sequential id to each sentence in a philosophy context (`sent.id`) and also calculated the number of words in each sentence as *sentence length* (`word.count`).
@@ -413,8 +417,8 @@ philosopher.list=
 
 ```
 
-## Step 3 - Data analysis -- sentiment analysis
-# Clestering of emotions
+# Step 3 - Data analysis -- sentiment analysis
+## Clestering of emotions
 
 ```{r, message=FALSE, warning=FALSE}
 heatmap.2(cor(philosopher.list%>%select(anger:trust)), 
@@ -459,7 +463,794 @@ fviz_cluster(km.res,
              show.clust.cent=FALSE)
 ```
 
-## Step 4 - Data analysis - topic modeling
+# Step 4 - Data analysis - topic modeling
 
 For topic modeling, we prepare a corpus of sentence snipets as follows. For each speech, we start with sentences and prepare a snipet with a given sentence with the flanking sentences.
 
+
+```{r, message=FALSE, warning=FALSE}
+corpus.list=philosopher.list[2:(nrow(philosopher.list)-1), ]
+sentence.pre=philosopher.list$sentences[1:(nrow(philosopher.list)-2)]
+sentence.post=philosopher.list$sentences[3:(nrow(philosopher.list)-1)]
+corpus.list$snipets=paste(sentence.pre, corpus.list$sentences, sentence.post, sep=" ")
+rm.rows=(1:nrow(corpus.list))[corpus.list$sent.id==1]
+rm.rows=c(rm.rows, rm.rows-1)
+corpus.list=corpus.list[-rm.rows, ]
+```
+
+## Text mining
+```{r, message=FALSE, warning=FALSE}
+docs <- Corpus(VectorSource(corpus.list$snipets))
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+```
+
+### Text basic processing
+```{r, message=FALSE, warning=FALSE}
+#remove potentially problematic symbols
+docs <-tm_map(docs,content_transformer(tolower))
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+
+#remove punctuation
+docs <- tm_map(docs, removePunctuation)
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+
+#Strip digits
+docs <- tm_map(docs, removeNumbers)
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+
+#remove stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+
+#remove whitespace
+docs <- tm_map(docs, stripWhitespace)
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+
+#Stem document
+docs <- tm_map(docs,stemDocument)
+writeLines(as.character(docs[[sample(1:nrow(corpus.list), 1)]]))
+```
+
+### Topic modeling
+
+Gengerate document-term matrices. 
+
+```{r, message=FALSE, warning=FALSE}
+dtm <- DocumentTermMatrix(docs)
+#convert rownames to filenames#convert rownames to filenames
+rownames(dtm) <- paste(corpus.list$type, corpus.list$File,
+                       corpus.list$Term, corpus.list$sent.id, sep="_")
+
+rowTotals <- apply(dtm , 1, sum) #Find the sum of words in each Document
+
+dtm  <- dtm[rowTotals> 0, ]
+corpus.list=corpus.list[rowTotals>0, ]
+
+```
+
+Run LDA
+
+```{r, message=FALSE, warning=FALSE}
+#Set parameters for Gibbs sampling
+burnin <- 4000
+iter <- 2000
+thin <- 500
+seed <-list(2003,5,63,100001,765)
+nstart <- 5
+best <- TRUE
+
+#Number of topics
+k <- 13
+
+#Run LDA using Gibbs sampling
+ldaOut <-LDA(dtm, k, method="Gibbs", control=list(nstart=nstart, 
+                                                 seed = seed, best=best,
+                                                 burnin = burnin, iter = iter, 
+                                                 thin=thin))
+#write out results
+#docs to topics
+ldaOut.topics <- as.matrix(topics(ldaOut))
+table(c(1:k, ldaOut.topics))
+write.csv(ldaOut.topics,file=paste("../output/LDAGibbs",k,"DocsToTopics.csv"))
+
+#top 6 terms in each topic
+ldaOut.terms <- as.matrix(terms(ldaOut,20))
+write.csv(ldaOut.terms,file=paste("../output/LDAGibbs",k,"TopicsToTerms.csv"))
+
+#probabilities associated with each topic assignment
+topicProbabilities <- as.data.frame(ldaOut@gamma)
+write.csv(topicProbabilities,file=paste("../output/LDAGibbs",k,"TopicProbabilities.csv"))
+```
+
+```{r, message=FALSE, warning=FALSE}
+terms.beta=ldaOut@beta
+terms.beta=scale(terms.beta)
+topics.terms=NULL
+for(i in 1:k){
+  topics.terms=rbind(topics.terms, ldaOut@terms[order(terms.beta[i,], decreasing = TRUE)[1:7]])
+}
+topics.terms
+ldaOut.terms
+```
+
+Based on the most popular terms and the most salient terms for each topic, we assign a hashtag to each topic. This part require manual setup as the topics are likely to change.
+
+```{r, message=FALSE, warning=FALSE}
+  topics.hash=c("Life", "Justice", "Understanding", "Things", "Produciton", "Rule", "Innovation", "Nature", "People", "Body", "Consciousness", "Truth", "Belong")
+corpus.list$ldatopic=as.vector(ldaOut.topics)
+corpus.list$ldahash=topics.hash[ldaOut.topics]
+
+colnames(topicProbabilities)=topics.hash
+corpus.list.df=cbind(corpus.list, topicProbabilities)
+```
+
+## Clustering of topics
+```{r, fig.width=3, fig.height=4}
+par(mar=c(1,1,1,1))
+topic.summary=tbl_df(corpus.list.df)%>%
+              select(author, Life:Belong)%>%
+              group_by(author)%>%
+              summarise_each(funs(mean))
+topic.summary=as.data.frame(topic.summary)
+rownames(topic.summary)=topic.summary[,1]
+
+topic.plot=c(1, 13, 9, 11, 8, 3, 7)
+print(topics.hash[topic.plot])
+
+heatmap.2(as.matrix(topic.summary[,topic.plot+1]), 
+          scale = "column", key=F, 
+          col = bluered(100),
+          cexRow = 0.9, cexCol = 0.9, margins = c(8, 8),
+          trace = "none", density.info = "none")
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+speech.df=tbl_df(corpus.list.df)%>%filter(word.count<20)%>%select(sentences, Life:Belong)
+print(paste(names(speech.df)[-1], 
+            as.character(speech.df$sentences[apply(as.data.frame(speech.df[,-1]), 2, which.max)]),
+            sep=": "))
+```
+
+```{r, message=FALSE, warning=FALSE}
+presid.summary=tbl_df(corpus.list.df)%>%
+  select(author, Life:Belong)%>%
+  group_by(author)%>%
+  summarise_each(funs(mean))
+
+presid.summary=as.data.frame(presid.summary)
+rownames(presid.summary)=as.character((presid.summary[,1]))
+km.res=kmeans(scale(presid.summary[,-1]), iter.max=200,
+              5)
+fviz_cluster(km.res, 
+             stand=T, repel= TRUE,
+             data = presid.summary[,-1],
+             show.clust.cent=FALSE)
+```
+
+# Step 5 - Interactive Word Cloud
+## Text processing
+
+We remove extra white space, convert all letters to the lower case, remove [stop words](https://github.com/arc12/Text-Mining-Weak-Signals/wiki/Standard-set-of-english-stopwords), remove empty words due to formatting errors, and remove punctuation. Then we compute the [Document-Term Matrix (DTM)](https://en.wikipedia.org/wiki/Document-term_matrix). 
+
+```{r, message=FALSE, warning=FALSE}
+myStopwords <- c("one", "will", "things", "something", "must", "just", "thing",
+                 "also", "two", "someone", "first", "always", "every", "else",
+                 "things", "many", "either", "without", "seems", "another",
+                 "never", "anything", "may", "someone", "now", "since", "nothing",
+                 "suppose", "neither", "can", "anyone", "everything", "ones", 
+                 "though", "much", "yet", "let", "whole", "even", "whether",
+                 "able", "indeed", "say", "said", "think", "therefore", "thus",
+                 "however", "upon", "from", "general", "still", "thou", "might",
+                 "way", "within")
+SophieStopwords <- c("less", "plato", "world", "sophie", "horse", "cave", "horses",
+                     "wall", "dog", "aristotle", "kant", "hegel", "locke", "marx",
+                     "chicken", "eggs", "room", "little", "alberto", "birthday",
+                     "athens", "apple", "yes", "descartes", "hlide", "red",
+                     "hume", "ball", "bear", "mother", "didn", "don", "isn",
+                     "philosophy", "example", "river", "mom", "three", "hermes")
+
+## Plato
+ff.plato<-Corpus(VectorSource(Plato.list$sentences))
+ff.plato<-tm_map(ff.plato, content_transformer(tolower))
+ff.plato<-tm_map(ff.plato, stripWhitespace)
+ff.plato<-tm_map(ff.plato, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.plato<-tm_map(ff.plato, removeWords, character(0))
+ff.plato<-tm_map(ff.plato, removePunctuation)
+
+## Aristotle
+ff.aristotle<-Corpus(VectorSource(Aristotle.list$sentences))
+ff.aristotle<-tm_map(ff.aristotle, content_transformer(tolower))
+ff.aristotle<-tm_map(ff.aristotle, stripWhitespace)
+ff.aristotle<-tm_map(ff.aristotle, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.aristotle<-tm_map(ff.aristotle, removeWords, character(0))
+ff.aristotle<-tm_map(ff.aristotle, removePunctuation)
+
+## Smith
+ff.smith<-Corpus(VectorSource(Smith.list$sentences))
+ff.smith<-tm_map(ff.smith, content_transformer(tolower))
+ff.smith<-tm_map(ff.smith, stripWhitespace)
+ff.smith<-tm_map(ff.smith, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.smith<-tm_map(ff.smith, removeWords, character(0))
+ff.smith<-tm_map(ff.smith, removePunctuation)
+
+## Locke
+ff.locke<-Corpus(VectorSource(Locke.list$sentences))
+ff.locke<-tm_map(ff.locke, content_transformer(tolower))
+ff.locke<-tm_map(ff.locke, stripWhitespace)
+ff.locke<-tm_map(ff.locke, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.locke<-tm_map(ff.locke, removeWords, character(0))
+ff.locke<-tm_map(ff.locke, removePunctuation)
+
+## Kant
+ff.kant<-Corpus(VectorSource(Kant.list$sentences))
+ff.kant<-tm_map(ff.kant, content_transformer(tolower))
+ff.kant<-tm_map(ff.kant, stripWhitespace)
+ff.kant<-tm_map(ff.kant, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.kant<-tm_map(ff.kant, removeWords, character(0))
+ff.kant<-tm_map(ff.kant, removePunctuation)
+
+## Hegel
+ff.hegel<-Corpus(VectorSource(Hegel.list$sentences))
+ff.hegel<-tm_map(ff.hegel, content_transformer(tolower))
+ff.hegel<-tm_map(ff.hegel, stripWhitespace)
+ff.hegel<-tm_map(ff.hegel, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.hegel<-tm_map(ff.hegel, removeWords, character(0))
+ff.hegel<-tm_map(ff.hegel, removePunctuation)
+
+## Marx
+ff.marx<-Corpus(VectorSource(Marx.list$sentences))
+ff.marx<-tm_map(ff.marx, content_transformer(tolower))
+ff.marx<-tm_map(ff.marx, stripWhitespace)
+ff.marx<-tm_map(ff.marx, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.marx<-tm_map(ff.marx, removeWords, character(0))
+ff.marx<-tm_map(ff.marx, removePunctuation)
+
+## Nietzsche
+ff.nietzsche<-Corpus(VectorSource(Nietzsche.list$sentences))
+ff.nietzsche<-tm_map(ff.nietzsche, content_transformer(tolower))
+ff.nietzsche<-tm_map(ff.nietzsche, stripWhitespace)
+ff.nietzsche<-tm_map(ff.nietzsche, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.nietzsche<-tm_map(ff.nietzsche, removeWords, character(0))
+ff.nietzsche<-tm_map(ff.nietzsche, removePunctuation)
+
+## Heidegger
+ff.heidegger<-Corpus(VectorSource(Heidegger.list$sentences))
+ff.heidegger<-tm_map(ff.heidegger, content_transformer(tolower))
+ff.heidegger<-tm_map(ff.heidegger, stripWhitespace)
+ff.heidegger<-tm_map(ff.heidegger, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.heidegger<-tm_map(ff.heidegger, removeWords, character(0))
+ff.heidegger<-tm_map(ff.heidegger, removePunctuation)
+
+## Wittgenstein
+ff.wittgenstein<-Corpus(VectorSource(Wittgenstein.list$sentences))
+ff.wittgenstein<-tm_map(ff.wittgenstein, content_transformer(tolower))
+ff.wittgenstein<-tm_map(ff.wittgenstein, stripWhitespace)
+ff.wittgenstein<-tm_map(ff.wittgenstein, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.wittgenstein<-tm_map(ff.wittgenstein, removeWords, character(0))
+ff.wittgenstein<-tm_map(ff.wittgenstein, removePunctuation)
+
+## Quine
+ff.quine<-Corpus(VectorSource(Quine.list$sentences))
+ff.quine<-tm_map(ff.quine, content_transformer(tolower))
+ff.quine<-tm_map(ff.quine, stripWhitespace)
+ff.quine<-tm_map(ff.quine, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.quine<-tm_map(ff.quine, removeWords, character(0))
+ff.quine<-tm_map(ff.quine, removePunctuation)
+
+## Derrida
+ff.derrida<-Corpus(VectorSource(Derrida.list$sentences))
+ff.derrida<-tm_map(ff.derrida, content_transformer(tolower))
+ff.derrida<-tm_map(ff.derrida, stripWhitespace)
+ff.derrida<-tm_map(ff.derrida, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.derrida<-tm_map(ff.derrida, removeWords, character(0))
+ff.derrida<-tm_map(ff.derrida, removePunctuation)
+
+## Russell
+ff.russell<-Corpus(VectorSource(Russell.list$sentences))
+ff.russell<-tm_map(ff.russell, content_transformer(tolower))
+ff.russell<-tm_map(ff.russell, stripWhitespace)
+ff.russell<-tm_map(ff.russell, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.russell<-tm_map(ff.russell, removeWords, character(0))
+ff.russell<-tm_map(ff.russell, removePunctuation)
+```
+
+## Compute TF-IDF weighted document-term matrices for individual speeches. 
+As we would like to identify interesting words for each inaugural speech, we use [TF-IDF](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) to weigh each term within each speech. It highlights terms that are more specific for a particular speech. 
+
+```{r, warning=FALSE, message=FALSE}
+## Plato
+plato.tdm <- DocumentTermMatrix(ff.plato,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.plato.tidy=tidy(plato.tdm)
+ff.tdm.plato=summarise(group_by(ff.plato.tidy, term), sum(count))
+
+## Aristole
+aristotle.tdm <- DocumentTermMatrix(ff.aristotle,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.aristotle.tidy=tidy(aristotle.tdm)
+ff.tdm.aristotle=summarise(group_by(ff.aristotle.tidy, term), sum(count))
+
+## Smith
+smith.tdm <- DocumentTermMatrix(ff.smith,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.smith.tidy=tidy(smith.tdm)
+ff.tdm.smith=summarise(group_by(ff.smith.tidy, term), sum(count))
+
+## Locke
+locke.tdm <- DocumentTermMatrix(ff.locke,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.locke.tidy=tidy(locke.tdm)
+ff.tdm.locke=summarise(group_by(ff.locke.tidy, term), sum(count))
+
+## Kant
+kant.tdm <- DocumentTermMatrix(ff.kant,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.kant.tidy=tidy(kant.tdm)
+ff.tdm.kant=summarise(group_by(ff.kant.tidy, term), sum(count))
+
+## Hegel
+hegel.tdm <- DocumentTermMatrix(ff.hegel,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.hegel.tidy=tidy(hegel.tdm)
+ff.tdm.hegel=summarise(group_by(ff.hegel.tidy, term), sum(count))
+
+## Marx
+marx.tdm <- DocumentTermMatrix(ff.marx,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.marx.tidy=tidy(marx.tdm)
+ff.tdm.marx=summarise(group_by(ff.marx.tidy, term), sum(count))
+
+## Nietzsche
+nietzsche.tdm <- DocumentTermMatrix(ff.nietzsche,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.nietzsche.tidy=tidy(nietzsche.tdm)
+ff.tdm.nietzsche=summarise(group_by(ff.nietzsche.tidy, term), sum(count))
+
+## Heidegger
+heidegger.tdm <- DocumentTermMatrix(ff.heidegger,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.heidegger.tidy=tidy(heidegger.tdm)
+ff.tdm.heidegger=summarise(group_by(ff.heidegger.tidy, term), sum(count))
+
+## Wittgenstein
+wittgenstein.tdm <- DocumentTermMatrix(ff.wittgenstein,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.wittgenstein.tidy=tidy(wittgenstein.tdm)
+ff.tdm.wittgenstein=summarise(group_by(ff.wittgenstein.tidy, term), sum(count))
+
+## Quine
+quine.tdm <- DocumentTermMatrix(ff.quine,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.quine.tidy=tidy(quine.tdm)
+ff.tdm.quine=summarise(group_by(ff.quine.tidy, term), sum(count))
+
+## Derrida
+derrida.tdm <- DocumentTermMatrix(ff.derrida,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.derrida.tidy=tidy(derrida.tdm)
+ff.tdm.derrida=summarise(group_by(ff.derrida.tidy, term), sum(count))
+
+## Russell
+russell.tdm <- DocumentTermMatrix(ff.russell,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.russell.tidy=tidy(russell.tdm)
+ff.tdm.russell=summarise(group_by(ff.russell.tidy, term), sum(count))
+
+## wordcloud
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Plato",
+     col = "#1b98e0",
+     cex = 2)
+wordcloud(ff.tdm.plato$term, ff.tdm.plato$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Blues"),
+          )
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Aristotle",
+      col = "forestgreen",
+      cex = 2)
+wordcloud(ff.tdm.aristotle$term, ff.tdm.aristotle$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuGn"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Smith",
+      col = "darkorchid",
+      cex = 2)
+wordcloud(ff.tdm.smith$term, ff.tdm.smith$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuPu"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Locke",
+      col = "grey0",
+      cex = 2)
+wordcloud(ff.tdm.locke$term, ff.tdm.locke$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Greys"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Kant",
+      col = "darkorange",
+      cex = 2)
+wordcloud(ff.tdm.kant$term, ff.tdm.kant$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Oranges"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Hegel",
+      col = "firebrick1",
+      cex = 2)
+wordcloud(ff.tdm.hegel$term, ff.tdm.hegel$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Reds"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Marx",
+      col = "#1b98e0",
+      cex = 2)
+wordcloud(ff.tdm.marx$term, ff.tdm.marx$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Blues"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Nietzsche",
+      col = "forestgreen",
+      cex = 2)
+wordcloud(ff.tdm.nietzsche$term, ff.tdm.nietzsche$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuGn"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Heidegger",
+      col = "darkorchid",
+      cex = 2)
+wordcloud(ff.tdm.heidegger$term, ff.tdm.heidegger$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuPu"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Wittgenstein",
+      col = "grey0",
+      cex = 2)
+wordcloud(ff.tdm.wittgenstein$term, ff.tdm.wittgenstein$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Greys"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Quine",
+      col = "darkorange",
+      cex = 2)
+wordcloud(ff.tdm.quine$term, ff.tdm.quine$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Oranges"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Derrida",
+      col = "firebrick1",
+      cex = 2)
+wordcloud(ff.tdm.derrida$term, ff.tdm.derrida$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(11,"Reds"))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Russell",
+      col = "forestgreen",
+      cex = 2)
+wordcloud(ff.tdm.russell$term, ff.tdm.russell$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuGn"))
+```
+
+# Step 6 - Interactive Word Cloud - Compared to Sophile's World
+## Import Sophie's world data
+
+I select some chapters (which named by philosophers' names) from the famous book *Sophie's World* to see any differences or similarities between the data generated online and from the book. [@Sophie]
+
+```{r, warning=FALSE, message=FALSE}
+folder.path="../data/Sophie/"
+Sophie=list.files(path = folder.path, pattern = "*.txt")
+prex.out=substr(Sophie, 6, nchar(Sophie)-4)
+
+ff.sophie.all<-Corpus(DirSource(folder.path))
+
+## Sophie's Plato
+Sophie.Plato <- ff.sophie.all[["Plato.txt"]]$content
+Sophie.Plato.list = sent_detect(Sophie.Plato,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.plato<-Corpus(VectorSource(Sophie.Plato.list))
+ff.sophie.plato<-tm_map(ff.sophie.plato, stripWhitespace)
+ff.sophie.plato<-tm_map(ff.sophie.plato, content_transformer(tolower))
+ff.sophie.plato<-tm_map(ff.sophie.plato, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.plato<-tm_map(ff.sophie.plato, removeWords, character(0))
+ff.sophie.plato<-tm_map(ff.sophie.plato, removePunctuation)
+
+## Sophie's Aristotle
+Sophie.Aristotle <- ff.sophie.all[["Aristotle.txt"]]$content
+Sophie.Aristotle.list = sent_detect(Sophie.Aristotle,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.aristotle<-Corpus(VectorSource(Sophie.Aristotle.list))
+ff.sophie.aristotle<-tm_map(ff.sophie.aristotle, stripWhitespace)
+ff.sophie.aristotle<-tm_map(ff.sophie.aristotle, content_transformer(tolower))
+ff.sophie.aristotle<-tm_map(ff.sophie.aristotle, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.aristotle<-tm_map(ff.sophie.aristotle, removeWords, character(0))
+ff.sophie.aristotle<-tm_map(ff.sophie.aristotle, removePunctuation)
+
+## Sophie's Locke
+Sophie.Locke <- ff.sophie.all[["Locke.txt"]]$content
+Sophie.Locke.list = sent_detect(Sophie.Locke,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.locke<-Corpus(VectorSource(Sophie.Locke.list))
+ff.sophie.locke<-tm_map(ff.sophie.locke, stripWhitespace)
+ff.sophie.locke<-tm_map(ff.sophie.locke, content_transformer(tolower))
+ff.sophie.locke<-tm_map(ff.sophie.locke, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.locke<-tm_map(ff.sophie.locke, removeWords, character(0))
+ff.sophie.locke<-tm_map(ff.sophie.locke, removePunctuation)
+
+## Sophie's Kant
+Sophie.Kant <- ff.sophie.all[["Kant.txt"]]$content
+Sophie.Kant.list = sent_detect(Sophie.Kant,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.kant<-Corpus(VectorSource(Sophie.Kant.list))
+ff.sophie.kant<-tm_map(ff.sophie.kant, stripWhitespace)
+ff.sophie.kant<-tm_map(ff.sophie.kant, content_transformer(tolower))
+ff.sophie.kant<-tm_map(ff.sophie.kant, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.kant<-tm_map(ff.sophie.kant, removeWords, character(0))
+ff.sophie.kant<-tm_map(ff.sophie.kant, removePunctuation)
+
+## Sophie's Hegel
+Sophie.Hegel <- ff.sophie.all[["Hegel.txt"]]$content
+Sophie.Hegel.list = sent_detect(Sophie.Hegel,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.hegel<-Corpus(VectorSource(Sophie.Hegel.list))
+ff.sophie.hegel<-tm_map(ff.sophie.hegel, stripWhitespace)
+ff.sophie.hegel<-tm_map(ff.sophie.hegel, content_transformer(tolower))
+ff.sophie.hegel<-tm_map(ff.sophie.hegel, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.hegel<-tm_map(ff.sophie.hegel, removeWords, character(0))
+ff.sophie.hegel<-tm_map(ff.sophie.hegel, removePunctuation)
+
+## Sophie's Marx
+Sophie.Marx <- ff.sophie.all[["Marx.txt"]]$content
+Sophie.Marx.list = sent_detect(Sophie.Marx,
+                        endmarks = c("?", ".", "!", "|",";", "'" ))
+
+ff.sophie.marx<-Corpus(VectorSource(Sophie.Marx.list))
+ff.sophie.marx<-tm_map(ff.sophie.marx, stripWhitespace)
+ff.sophie.marx<-tm_map(ff.sophie.marx, content_transformer(tolower))
+ff.sophie.marx<-tm_map(ff.sophie.marx, removeWords, c(stopwords('english'), myStopwords,SophieStopwords))
+ff.sophie.marx<-tm_map(ff.sophie.marx, removeWords, character(0))
+ff.sophie.marx<-tm_map(ff.sophie.marx, removePunctuation)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+## Sophie's Plato
+sophie.plato.tdm <- DocumentTermMatrix(ff.sophie.plato,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.plato.tidy=tidy(sophie.plato.tdm)
+ff.tdm.sophie.plato=summarise(group_by(ff.sophie.plato.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Plato",
+     col = "#1b98e0",
+     cex = 2)
+wordcloud(ff.tdm.sophie.plato$term, ff.tdm.sophie.plato$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Blues"),
+          )
+
+## Sophie's Aristotle
+sophie.aristotle.tdm <- DocumentTermMatrix(ff.sophie.aristotle,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.aristotle.tidy=tidy(sophie.aristotle.tdm)
+ff.tdm.sophie.aristotle=summarise(group_by(ff.sophie.aristotle.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Aristotle",
+     col = "forestgreen",
+     cex = 2)
+wordcloud(ff.tdm.sophie.aristotle$term, ff.tdm.sophie.aristotle$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"BuGn"),
+          )
+
+## Sophie's Locke
+sophie.locke.tdm <- DocumentTermMatrix(ff.sophie.locke,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.locke.tidy=tidy(sophie.locke.tdm)
+ff.tdm.sophie.locke=summarise(group_by(ff.sophie.locke.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Locke",
+     col = "grey0",
+     cex = 2)
+wordcloud(ff.tdm.sophie.locke$term, ff.tdm.sophie.locke$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Greys"),
+          )
+
+## Sophie's Kant
+sophie.kant.tdm <- DocumentTermMatrix(ff.sophie.kant,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.kant.tidy=tidy(sophie.kant.tdm)
+ff.tdm.sophie.kant=summarise(group_by(ff.sophie.kant.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Kant",
+     col = "darkorange",
+     cex = 2)
+wordcloud(ff.tdm.sophie.kant$term, ff.tdm.sophie.kant$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Oranges"),
+          )
+
+## Sophie's Hegel
+sophie.hegel.tdm <- DocumentTermMatrix(ff.sophie.hegel,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.hegel.tidy=tidy(sophie.hegel.tdm)
+ff.tdm.sophie.hegel=summarise(group_by(ff.sophie.hegel.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Hegel",
+     col = "firebrick1",
+     cex = 2)
+wordcloud(ff.tdm.sophie.hegel$term, ff.tdm.sophie.hegel$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Reds"),
+          )
+
+## Sophie's Marx
+sophie.marx.tdm <- DocumentTermMatrix(ff.sophie.marx,
+                          control = list(weighting = function(x) weightTfIdf(x,normalize=FALSE),
+                                         stopwords = TRUE))
+ff.sophie.marx.tidy=tidy(sophie.marx.tdm)
+ff.tdm.sophie.marx=summarise(group_by(ff.sophie.marx.tidy, term), sum(count))
+
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Sophie's Marx",
+     col = "#1b98e0",
+     cex = 2)
+wordcloud(ff.tdm.sophie.marx$term, ff.tdm.sophie.marx$`sum(count)`,
+          max.words=100,
+          min.freq=1,
+          random.order=FALSE,
+          rot.per=0.3,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Blues"),
+          )
+```
