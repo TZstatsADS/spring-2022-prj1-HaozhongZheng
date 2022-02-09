@@ -13,7 +13,6 @@ Term: Fall 2021
 + This project is conducted by [Haozhong Zheng]
 
 
-
 + Project summary: [a short summary] In this project, we conduct sentimental analysis, topic modeling and wordcloud to some of the most famous philosophers according to Sophie's World (a novel from Gaarder). We want to check whether the novel decribe philosopher correctly or not. 
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
