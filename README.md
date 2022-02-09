@@ -1,16 +1,19 @@
 # Applied Data Science @ Columbia
 ## Fall 2021
-## Project 1: A "data story" on the history of philosophy
+## Project 1: To be or not to be? Does Sophie's World describe philosopher correctly?
+
+<img src="figs/Sophies World.jpg" width="500">
 
 ### [Project Description](doc/)
 This is the first and only *individual* (as opposed to *team*) project this semester. 
 
 Term: Fall 2021
 
-+ Projec title: Lorem ipsum dolor sit amet
++ Projec title: To be or not to be? Does Sophie's World describe philosopher correctly?
 + This project is conducted by [Haozhong Zheng]
 
-+ Project summary: [a short summary] Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
++ Project summary: [a short summary] In this project, we conduct sentimental analysis, topic modeling and wordcloud to some of the most famous philosophers according to Sophie's World (a novel from Gaarder). We want to check whether the novel decribe philosopher correctly or not. 
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
