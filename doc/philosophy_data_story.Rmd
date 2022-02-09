@@ -1,5 +1,5 @@
 ---
-title: "Week1 Project Data Story"
+title: "To be or ont to be? Does Sophie's World describe philosopher correctly?"
 author: Haozhong Zheng (hz2694)
 runtime: html_notebook
 output:
@@ -8,6 +8,7 @@ output:
 bibliography: references.bib
 csl: asm.csl
 ---
+# The presentation website is on [5243 Porject 1](https://haozhongzheng.github.io/5243proj1/)
 
 # Step 0 - Install and load libraries
 ```{r, message=FALSE, warning=FALSE}
@@ -463,6 +464,8 @@ fviz_cluster(km.res,
              show.clust.cent=FALSE)
 ```
 
+The cluster plot gives us the cluster of emotions of philosophers. Most of the philosopher were in one group except for Nietzsche, who is famous for criticizing European religion. Most of his word may contain negative emotions, which may make him obviously different from the others.
+
 # Step 4 - Data analysis - topic modeling
 
 For topic modeling, we prepare a corpus of sentence snipets as follows. For each speech, we start with sentences and prepare a snipet with a given sentence with the flanking sentences.
@@ -627,6 +630,8 @@ fviz_cluster(km.res,
              data = presid.summary[,-1],
              show.clust.cent=FALSE)
 ```
+
+From the cluster plot, Smith and Marx, who are the authors of The Wealth of Nations and Kapital, have more in common in topics. Plato and Aristotle focus more on topics about people, they are in the same cluster. Quine, Russell and Wittgenstein are from school of analytic, that is why they are relative close to each other. Both Kant and Hegel are from German idealism, which explain they are in the same group.
 
 # Step 5 - Interactive Word Cloud
 ## Text processing
@@ -1254,3 +1259,5 @@ wordcloud(ff.tdm.sophie.marx$term, ff.tdm.sophie.marx$`sum(count)`,
           colors=brewer.pal(9,"Blues"),
           )
 ```
+
+By comparing philosophy data and Sophie's World , the word cloud seems very similar. Therefore, we can conclude that the book capture the essence of these philosophers. No wonder it is one of the most famous and best-selling philosophy books.
